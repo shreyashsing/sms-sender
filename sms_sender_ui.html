@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SMS Campaign Sender</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b0f17;
+      --surface:  #111827;
+      --border:   #1e2d40;
+      --accent:   #3b82f6;
+      --accent2:  #60a5fa;
+      --success:  #10b981;
+      --danger:   #ef4444;
+      --warn:     #f59e0b;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --mono:     'DM Mono', monospace;
+      --sans:     'Sora', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 80px;
+    }
+
+    /* ── noise grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0;
+    }
+
+    .wrap { position: relative; z-index: 1; width: 100%; max-width: 580px; }
+
+    /* ── header ── */
+    .header { margin-bottom: 40px; }
+    .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-icon svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13px; color: var(--muted); font-weight: 300; margin-top: 2px; }
+
+    /* ── card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 16px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--accent2);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: var(--border);
+    }
+
+    /* ── fields ── */
+    .field { margin-bottom: 20px; }
+    .field:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 7px;
+      font-family: var(--mono);
+      letter-spacing: 0.3px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    textarea:focus {
+      border-color: var(--accent);
+    }
+    textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
+
+    .char-count {
+      text-align: right;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      margin-top: 5px;
+      transition: color 0.2s;
+    }
+    .char-count.warn  { color: var(--warn); }
+    .char-count.over  { color: var(--danger); }
+
+    /* ── file drop zone ── */
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.05);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-icon {
+      width: 40px; height: 40px;
+      background: rgba(59,130,246,0.1);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .drop-icon svg { width: 20px; height: 20px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .drop-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .drop-sub   { font-size: 12px; color: var(--muted); }
+
+    .file-selected {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: rgba(16,185,129,0.08);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 10px;
+    }
+    .file-selected.show { display: flex; }
+    .file-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: rgba(16,185,129,0.15);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .file-icon svg { width: 16px; height: 16px; stroke: var(--success); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .file-name { font-size: 13px; font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; transition: color 0.2s; }
+    .file-remove:hover { color: var(--danger); }
+
+    /* ── preview badge ── */
+    .preview-row {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .preview-row.show { display: flex; }
+    .badge {
+      background: rgba(59,130,246,0.12);
+      color: var(--accent2);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 11px;
+    }
+
+    /* ── send button ── */
+    .btn-send {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 15px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      letter-spacing: -0.2px;
+    }
+    .btn-send:hover:not(:disabled) { background: #2563eb; }
+    .btn-send:active:not(:disabled) { transform: scale(0.99); }
+    .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-send svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .sending .spinner { display: block; }
+    .sending .send-icon { display: none; }
+
+    /* ── status panel ── */
+    .status-panel {
+      display: none;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-top: 16px;
+      border: 1px solid;
+    }
+    .status-panel.show { display: block; }
+    .status-panel.success { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); }
+    .status-panel.error   { background: rgba(239,68,68,0.08);  border-color: rgba(239,68,68,0.25); }
+    .status-panel.loading { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.2); }
+
+    .status-title {
+      font-size: 14px; font-weight: 600; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status-panel.success .status-title { color: var(--success); }
+    .status-panel.error   .status-title { color: var(--danger); }
+    .status-panel.loading .status-title { color: var(--accent2); }
+
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 10px; margin-top: 12px;
+    }
+    .stat-box {
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px; padding: 10px 12px; text-align: center;
+    }
+    .stat-val  { font-size: 22px; font-weight: 600; font-family: var(--mono); }
+    .stat-label{ font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .stat-box.sent    .stat-val { color: var(--success); }
+    .stat-box.failed  .stat-val { color: var(--danger); }
+    .stat-box.skipped .stat-val { color: var(--warn); }
+
+    .status-msg { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* ── loading bar ── */
+    @keyframes progress { from { width: 0% } to { width: 90% } }
+    .progress-bar-wrap {
+      background: var(--border); border-radius: 4px; height: 4px;
+      overflow: hidden; margin-top: 12px;
+    }
+    .progress-bar {
+      height: 100%; background: var(--accent); border-radius: 4px;
+      animation: progress 8s ease-out forwards;
+    }
+
+    /* ── footer note ── */
+    .footer-note {
+      font-size: 11px; color: var(--muted);
+      text-align: center; margin-top: 24px;
+      font-family: var(--mono); line-height: 1.8;
+    }
+    .footer-note a { color: var(--accent2); text-decoration: none; }
+
+    /* ── column hint ── */
+    .hint-box {
+      background: rgba(59,130,246,0.06);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 10px;
+    }
+    .hint-box p { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .hint-table { width: 100%; border-collapse: collapse; }
+    .hint-table th, .hint-table td {
+      font-size: 12px; font-family: var(--mono);
+      text-align: left; padding: 4px 10px;
+    }
+    .hint-table th { color: var(--accent2); }
+    .hint-table td { color: var(--text); opacity: 0.7; }
+    .hint-table tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <h1>SMS Campaign Sender</h1>
+    </div>
+    <p class="subtitle">Upload your contact list and send a personalised message to everyone in one go.</p>
+  </div>
+
+  <!-- Card 1: Contact File -->
+  <div class="card">
+    <div class="section-label">01 — Contact file</div>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.csv,.xls"/>
+      <div class="drop-icon">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <div class="drop-title">Drop your file here or click to browse</div>
+      <div class="drop-sub">Accepts .xlsx or .csv</div>
+    </div>
+
+    <div class="file-selected" id="fileSelected">
+      <div class="file-icon">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <span class="file-name" id="fileName">—</span>
+      <button class="file-remove" id="fileRemove" title="Remove file">×</button>
+    </div>
+
+    <div class="hint-box" style="margin-top:14px;">
+      <p>Your spreadsheet must have these two columns (names are flexible):</p>
+      <table class="hint-table">
+        <tr><th>name</th><th>phone</th></tr>
+        <tr><td>Sarah Johnson</td><td>07911 123456</td></tr>
+        <tr><td>James Smith</td><td>+447700900123</td></tr>
+        <tr><td>Emma Wilson</td><td>447833456789</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Card 2: Message -->
+  <div class="card">
+    <div class="section-label">02 — Message</div>
+
+    <div class="field">
+      <label>Your message</label>
+      <textarea id="message" placeholder="e.g. We have an exclusive offer just for you this weekend. Visit our store for 20% off everything. Reply STOP to unsubscribe."></textarea>
+      <div class="char-count" id="charCount">0 / 160 chars · 1 SMS</div>
+    </div>
+
+    <div class="preview-row show" id="previewRow">
+      <span style="color:var(--muted)">Preview:</span>
+      <span class="badge" id="previewBadge">Hi [Name], your message here…</span>
+    </div>
+  </div>
+
+  <!-- Card 3: Details -->
+  <div class="card">
+    <div class="section-label">03 — Campaign details</div>
+
+    <div class="field">
+      <label>Sender / brand name</label>
+      <input type="text" id="senderName" placeholder="e.g. Acme Ltd" maxlength="60"/>
+    </div>
+    <div class="field">
+      <label>Report email (delivery summary sent here)</label>
+      <input type="email" id="reportEmail" placeholder="you@yourdomain.co.uk"/>
+    </div>
+  </div>
+
+  <!-- Send Button -->
+  <button class="btn-send" id="sendBtn" disabled>
+    <svg class="send-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    <div class="spinner"></div>
+    <span id="btnLabel">Send Campaign</span>
+  </button>
+
+  <!-- Status Panel -->
+  <div class="status-panel" id="statusPanel">
+    <div class="status-title" id="statusTitle"></div>
+    <div class="status-msg"  id="statusMsg"></div>
+    <div class="stat-grid"   id="statGrid" style="display:none"></div>
+    <div class="progress-bar-wrap" id="progressWrap" style="display:none">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Messages are sent via Twilio · UK numbers only (+44)<br/>
+    Always include opt-out instructions · PECR &amp; UK GDPR compliant use only
+  </div>
+
+</div>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  // Replace this with your actual n8n webhook URL after importing the workflow
+  const WEBHOOK_URL = 'https://soumay1234567890.app.n8n.cloud/webhook-test/send-bulk-sms';
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const fileInput   = document.getElementById('fileInput');
+  const dropZone    = document.getElementById('dropZone');
+  const fileSelected= document.getElementById('fileSelected');
+  const fileName    = document.getElementById('fileName');
+  const fileRemove  = document.getElementById('fileRemove');
+  const messageEl   = document.getElementById('message');
+  const charCount   = document.getElementById('charCount');
+  const previewBadge= document.getElementById('previewBadge');
+  const senderName  = document.getElementById('senderName');
+  const reportEmail = document.getElementById('reportEmail');
+  const sendBtn     = document.getElementById('sendBtn');
+  const btnLabel    = document.getElementById('btnLabel');
+  const statusPanel = document.getElementById('statusPanel');
+  const statusTitle = document.getElementById('statusTitle');
+  const statusMsg   = document.getElementById('statusMsg');
+  const statGrid    = document.getElementById('statGrid');
+  const progressWrap= document.getElementById('progressWrap');
+
+  let selectedFile = null;
+
+  // ── File selection ────────────────────────────────────────────────────────
+  fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+
+  fileRemove.addEventListener('click', e => {
+    e.stopPropagation();
+    selectedFile = null;
+    fileInput.value = '';
+    fileSelected.classList.remove('show');
+    validate();
+  });
+
+  function setFile(f) {
+    if (!f) return;
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (!['xlsx','csv','xls'].includes(ext)) {
+      showStatus('error', 'Unsupported file type', 'Please upload a .xlsx or .csv file.');
+      return;
+    }
+    selectedFile = f;
+    fileName.textContent = f.name;
+    fileSelected.classList.add('show');
+    hideStatus();
+    validate();
+  }
+
+  // ── Message counter ───────────────────────────────────────────────────────
+  messageEl.addEventListener('input', () => {
+    const len  = messageEl.value.length;
+    const msgs = Math.ceil(len / 160) || 1;
+    charCount.textContent = `${len} / 160 chars · ${msgs} SMS`;
+    charCount.className = 'char-count' + (len > 320 ? ' over' : len > 160 ? ' warn' : '');
+
+    const txt = messageEl.value.trim();
+    previewBadge.textContent = txt
+      ? `Hi [Name], ${txt.slice(0,60)}${txt.length>60?'…':''}`
+      : 'Hi [Name], your message here…';
+    validate();
+  });
+
+  // ── Validate form ─────────────────────────────────────────────────────────
+  function validate() {
+    const ok = selectedFile &&
+               messageEl.value.trim().length > 0 &&
+               senderName.value.trim().length > 0 &&
+               /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reportEmail.value.trim());
+    sendBtn.disabled = !ok;
+  }
+
+  senderName.addEventListener('input',  validate);
+  reportEmail.addEventListener('input', validate);
+
+  // ── Send ──────────────────────────────────────────────────────────────────
+  sendBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    // UI: loading state
+    sendBtn.classList.add('sending');
+    sendBtn.disabled = true;
+    btnLabel.textContent = 'Sending…';
+    showStatus('loading', '📡 Sending campaign…',
+      'Your messages are being dispatched. This may take a minute depending on list size.');
+    progressWrap.style.display = 'block';
+
+    // Re-create progress bar to restart animation
+    const old = document.getElementById('progressBar');
+    const nb  = document.createElement('div');
+    nb.className = 'progress-bar'; nb.id = 'progressBar';
+    old.replaceWith(nb);
+
+    const form = new FormData();
+    form.append('file',        selectedFile);
+    form.append('message',     messageEl.value.trim());
+    form.append('senderName',  senderName.value.trim());
+    form.append('reportEmail', reportEmail.value.trim());
+
+    try {
+      const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: form });
+      const data = await res.json();
+
+      progressWrap.style.display = 'none';
+
+      if (res.ok && data.status === 'success') {
+        showStatus('success', '✅ Campaign sent!', `A full delivery report has been sent to ${reportEmail.value.trim()}.`);
+        statGrid.style.display = 'grid';
+        statGrid.innerHTML = `
+          <div class="stat-box sent">
+            <div class="stat-val">${data.sent ?? '—'}</div>
+            <div class="stat-label">Sent</div>
+          </div>
+          <div class="stat-box failed">
+            <div class="stat-val">${data.failed ?? '—'}</div>
+            <div class="stat-label">Failed</div>
+          </div>
+          <div class="stat-box skipped">
+            <div class="stat-val">${data.skipped ?? '—'}</div>
+            <div class="stat-label">Skipped</div>
+          </div>`;
+        // Reset form
+        resetForm();
+      } else {
+        const errMsg = data.message || 'Something went wrong. Please check your contact file and try again.';
+        showStatus('error', '❌ Campaign failed', errMsg);
+      }
+    } catch (err) {
+      progressWrap.style.display = 'none';
+      showStatus('error', '❌ Could not reach server',
+        'Unable to connect to the sending service. Please check your internet connection or contact support.');
+    }
+
+    sendBtn.classList.remove('sending');
+    sendBtn.disabled = false;
+    btnLabel.textContent = 'Send Campaign';
+    validate();
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function showStatus(type, title, msg) {
+    statusPanel.className = `status-panel show ${type}`;
+    statusTitle.textContent = title;
+    statusMsg.textContent   = msg;
+    if (type !== 'success') statGrid.style.display = 'none';
+  }
+  function hideStatus() {
+    statusPanel.className = 'status-panel';
+    statGrid.style.display = 'none';
+  }
+  function resetForm() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileSelected.classList.remove('show');
+    messageEl.value = '';
+    charCount.textContent = '0 / 160 chars · 1 SMS';
+    charCount.className = 'char-count';
+    previewBadge.textContent = 'Hi [Name], your message here…';
+  }
+</script>
+</body>
+</html>
